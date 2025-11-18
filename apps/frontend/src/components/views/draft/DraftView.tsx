@@ -103,6 +103,11 @@ const formatPercent = (value: number) => {
     return `${pct.toFixed(precision)}%`;
 };
 
+const isBlindPick = (entry: RecommendationEntry) => {
+    const blindTag = entry.reasonTags.find((tag) => tag.id === "blind");
+    return (blindTag?.value ?? 0) > 0;
+};
+
 const DraftView: Component = () => {
     const { dataset } = useDataset();
     const { config } = useUser();
@@ -218,9 +223,10 @@ const ManualChampionList: Component<{
     const statusIcons = (pick: RecommendationEntry) => {
         const icons: { icon: typeof sparkles; label: string }[] = [];
         if (pick.isMeta) icons.push({ icon: sparkles, label: "Meta" });
+        const blindSafe = isBlindPick(pick);
         icons.push({
-            icon: pick.isBlind ? eye : questionMarkCircle,
-            label: pick.isBlind ? "Blind" : "Pas blind",
+            icon: blindSafe ? eye : questionMarkCircle,
+            label: blindSafe ? "Blind" : "Pas blind",
         });
         if (pick.breakdown.reliability > 0.1) icons.push({ icon: shieldCheck, label: "Fiable" });
         if (Math.abs(pick.exposureScore) > 0.05)
