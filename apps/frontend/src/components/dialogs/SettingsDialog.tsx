@@ -1,8 +1,11 @@
 import { Icon } from "solid-heroicons";
 import { questionMarkCircle } from "solid-heroicons/solid-mini";
-import { Show } from "solid-js";
+import { For, Show } from "solid-js";
+import { useDataset } from "../../contexts/DatasetContext";
 import { ButtonGroup, ButtonGroupOption } from "../common/ButtonGroup";
+import { buttonVariants } from "../common/Button";
 import { Switch } from "../common/Switch";
+import { cn } from "../../utils/style";
 import {
     RiskLevel,
     displayNameByRiskLevel,
@@ -25,6 +28,7 @@ import { FAQDialog } from "./FAQDialog";
 export default function SettingsDialog() {
     const { isDesktop } = useMedia();
     const { config, setConfig } = useUser();
+    const { reload, proPatches } = useDataset();
 
     const riskLevelOptions: ButtonGroupOption<RiskLevel>[] = RiskLevel.map(
         (level) => ({
@@ -32,6 +36,35 @@ export default function SettingsDialog() {
             label: displayNameByRiskLevel[level],
         })
     );
+
+    const dataSourceOptions = [
+        { value: "riot" as const, label: "Riot API" },
+        { value: "pro" as const, label: "Pro Mode" },
+    ];
+
+    const proPatchOptions = () => {
+        const patches = proPatches();
+        const latestPatch = patches[0];
+        const entries: { value: string; label: string }[] = [
+            {
+                value: "latest",
+                label: latestPatch
+                    ? `Latest patch (${latestPatch})`
+                    : "Latest patch",
+            },
+            {
+                value: "all",
+                label: "All patches",
+            },
+        ];
+        for (const patch of patches) {
+            entries.push({
+                value: patch,
+                label: `Patch ${patch}`,
+            });
+        }
+        return entries;
+    };
 
     const draftTablePlacementOptions = [
         {
@@ -107,11 +140,61 @@ export default function SettingsDialog() {
                     }
                 />
             </div>
+            <div class="mt-6">
+                <h3 class="text-3xl uppercase">Data</h3>
+                <div class="flex flex-col gap-1 mt-2">
+                    <span class="text-lg uppercase">Data source</span>
+                    <ButtonGroup
+                        options={dataSourceOptions}
+                        selected={config.dataSource}
+                        size="sm"
+                        onChange={(value) =>
+                            setConfig({
+                                dataSource: value,
+                            })
+                        }
+                    />
+                </div>
+                <p class="text-xs uppercase text-neutral-400 mt-2">
+                    Pro mode uses the offline dataset with recency weighting.
+                </p>
+                <Show when={config.dataSource === "pro"}>
+                    <div class="mt-3 flex flex-col gap-3">
+                        <div class="flex flex-col gap-2">
+                            <span class="text-lg uppercase">Patch filter</span>
+                            <select
+                                class="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm uppercase tracking-wide text-neutral-200 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                                value={config.proPatch}
+                                onChange={(event) =>
+                                    setConfig({ proPatch: event.currentTarget.value })
+                                }
+                            >
+                                <For each={proPatchOptions()}>
+                                    {(option) => (
+                                        <option value={option.value}>{option.label}</option>
+                                    )}
+                                </For>
+                            </select>
+                        </div>
+                        <p class="text-xs uppercase text-neutral-400 leading-relaxed">
+                            Pick the patch you want to mirror. "Latest patch" always follows the
+                            newest data available, while "All patches" keeps every sample.
+                        </p>
+                        <button
+                            type="button"
+                            class={cn(buttonVariants({ variant: "secondary" }), "w-fit")}
+                            onClick={reload}
+                        >
+                            Reload data
+                        </button>
+                    </div>
+                </Show>
+            </div>
             <div>
                 <h3 class="text-3xl uppercase">UI</h3>
                 <div class="flex space-x-8 items-center justify-between mt-2">
                     <span class="text-lg uppercase">
-                        Place favourites at top of suggestions
+                        Place champion pool at top of suggestions
                     </span>
                     <Switch
                         checked={config.showFavouritesAtTop}
@@ -225,3 +308,4 @@ export default function SettingsDialog() {
         </DialogContent>
     );
 }
+

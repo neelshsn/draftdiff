@@ -1,6 +1,9 @@
 import "dotenv/config";
+import path from "node:path";
+import fs from "node:fs/promises";
 import { getChampionDataFromLolalytics } from "./lolalytics";
 import {
+    DATASET_VERSION,
     deleteDatasetMatchupSynergyData,
     Dataset,
     removeRankBias,
@@ -10,7 +13,7 @@ import {
     RuneData,
     RunePathData,
 } from "@draftgap/core/src/models/dataset/RuneData";
-import { storeDataset } from "./storage/storage";
+import { storeDataset, storeJson } from "./storage/storage";
 import {
     getVersions,
     getChampions,
@@ -23,8 +26,10 @@ import {
     RiotSummonerSpell,
 } from "./riot";
 import { SummonerSpellData } from "@draftgap/core/src/models/dataset/SummonerSpellData";
+import { precomputeDraftMetrics } from "./precompute/draftMetrics";
 
 const BATCH_SIZE = 10;
+const skipDatasetFetch = process.env.SKIP_DATASET_FETCH === "true";
 
 // TODO: Move to Riot API if exists?
 const STAT_SHARD_DATA = {
@@ -78,7 +83,31 @@ const STAT_SHARD_DATA = {
     },
 };
 
+const WORKSPACE_ROOT = path.resolve(__dirname, "..", "..", "..");
+const DATA_DIR = path.resolve(WORKSPACE_ROOT, "data");
+
+function shouldUploadToS3() {
+    return Boolean(
+        process.env.S3_ACCESS_KEY_ID &&
+            process.env.S3_SECRET_ACCESS_KEY &&
+            process.env.S3_BUCKET
+    );
+}
+
+async function writeLocalDataset(dataset: Dataset, filename: string) {
+    const target = path.resolve(DATA_DIR, filename);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, JSON.stringify(dataset, null, 2), "utf8");
+    console.log(`Saved dataset locally at ${target}`);
+}
+
 async function main() {
+    if (skipDatasetFetch) {
+        console.log("SKIP_DATASET_FETCH enabled � skipping Riot fetch and only regenerating draft metrics.");
+        await generateAndStoreDraftMetrics();
+        return;
+    }
+
     const currentVersion = (await getVersions())[0];
     console.log("Patch:", currentVersion);
 
@@ -117,8 +146,16 @@ async function main() {
 
     deleteDatasetMatchupSynergyData(datasetCurrentPatch);
 
-    await storeDataset(datasetCurrentPatch, { name: "current-patch" });
-    await storeDataset(dataset30days, { name: "30-days" });
+    if (shouldUploadToS3()) {
+        await storeDataset(datasetCurrentPatch, { name: "current-patch" });
+        await storeDataset(dataset30days, { name: "30-days" });
+    } else {
+        console.log("S3 credentials missing – skipping upload and writing local datasets.");
+        await writeLocalDataset(datasetCurrentPatch, "current-patch.json");
+        await writeLocalDataset(dataset30days, "30-days.json");
+    }
+
+    await generateAndStoreDraftMetrics();
 }
 
 function riotRunesToRuneData(runes: RiotRunePath[]) {
@@ -258,3 +295,43 @@ async function getDataset(
 }
 
 main();
+
+async function generateAndStoreDraftMetrics() {
+    const defaultCsv = path.resolve(WORKSPACE_ROOT, "data", "2025.csv");
+    const csvPath =
+        process.env.DRAFT_METRICS_CSV_PATH ?? defaultCsv;
+    const patch =
+        process.env.DRAFT_METRICS_PATCH ?? "15.01";
+
+    console.log(
+        `Generating draft metrics from ${csvPath} (patch ${patch})`
+    );
+
+    const metrics = await precomputeDraftMetrics(csvPath, {
+        patch,
+    });
+
+    const outputKey = `datasets/v${DATASET_VERSION}/draft-metrics.json`;
+    if (shouldUploadToS3()) {
+        await storeJson(metrics, { key: outputKey });
+    } else {
+        console.log("S3 credentials missing – skipping draft metrics upload.");
+    }
+
+    const localOutput =
+        process.env.DRAFT_METRICS_LOCAL_OUTPUT ??
+        path.resolve(WORKSPACE_ROOT, "data", "draft-metrics.json");
+    await fs.mkdir(path.dirname(localOutput), { recursive: true });
+    await fs.writeFile(
+        localOutput,
+        JSON.stringify(metrics, null, 2),
+        "utf8"
+    );
+
+    console.log(
+        `Draft metrics stored at ${outputKey} and written to ${localOutput}`
+    );
+}
+
+
+

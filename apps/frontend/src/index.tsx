@@ -14,6 +14,7 @@ import { BuildProvider } from "./contexts/BuildContext";
 import { DraftViewProvider } from "./contexts/DraftViewContext";
 import { UserProvider } from "./contexts/UserContext";
 import { DraftSuggestionsProvider } from "./contexts/DraftSuggestionsContext";
+import { DraftStrategyProvider } from "./contexts/DraftStrategyContext";
 import { DraftAnalysisProvider } from "./contexts/DraftAnalysisContext";
 import { DatasetProvider } from "./contexts/DatasetContext";
 import { DraftFiltersProvider } from "./contexts/DraftFiltersContext";
@@ -32,26 +33,28 @@ render(
                     <TooltipProvider>
                         <DraftViewProvider>
                             <DraftFiltersProvider>
-                                <DraftProvider>
-                                    <DraftAnalysisProvider>
-                                        <ExtraDraftAnalysisProvider>
-                                            <DraftSuggestionsProvider>
-                                                <BuildProvider>
-                                                    <LolClientProvider>
-                                                        <App />
-                                                        <Toaster
-                                                            position="bottom-right"
-                                                            toastOptions={{
-                                                                duration:
-                                                                    Infinity,
-                                                            }}
-                                                        />
-                                                    </LolClientProvider>
-                                                </BuildProvider>
-                                            </DraftSuggestionsProvider>
-                                        </ExtraDraftAnalysisProvider>
-                                    </DraftAnalysisProvider>
-                                </DraftProvider>
+                                <DraftStrategyProvider>
+                                    <DraftProvider>
+                                        <DraftAnalysisProvider>
+                                            <ExtraDraftAnalysisProvider>
+                                                <DraftSuggestionsProvider>
+                                                    <BuildProvider>
+                                                        <LolClientProvider>
+                                                            <App />
+                                                            <Toaster
+                                                                position="bottom-right"
+                                                                toastOptions={{
+                                                                    duration:
+                                                                        Infinity,
+                                                                }}
+                                                            />
+                                                        </LolClientProvider>
+                                                    </BuildProvider>
+                                                </DraftSuggestionsProvider>
+                                            </ExtraDraftAnalysisProvider>
+                                        </DraftAnalysisProvider>
+                                    </DraftProvider>
+                                </DraftStrategyProvider>
                             </DraftFiltersProvider>
                         </DraftViewProvider>
                     </TooltipProvider>

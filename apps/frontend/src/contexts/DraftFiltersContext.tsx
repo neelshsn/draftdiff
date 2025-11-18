@@ -10,14 +10,20 @@ import { Role } from "@draftgap/core/src/models/Role";
 export function createDraftFiltersContext() {
     const [search, setSearch] = createSignal("");
     const [roleFilter, setRoleFilter] = createSignal<Role>();
-
-    const [favouriteFilter, setFavouriteFilter] = createSignal(false);
+    const [bannedOnlyFilter, setBannedOnlyFilter] = createSignal(false);
+    const [metaFilter, setMetaFilter] =
+        createSignal<"all" | "meta" | "offMeta">("meta");
+    const [availabilityFilter, setAvailabilityFilter] = createSignal<
+        "all" | "eligible" | "banned" | "picked"
+    >("all");
 
     function resetDraftFilters() {
         batch(() => {
             setSearch("");
             setRoleFilter(undefined);
-            setFavouriteFilter(false);
+            setBannedOnlyFilter(false);
+            setMetaFilter("meta");
+            setAvailabilityFilter("all");
         });
     }
 
@@ -26,8 +32,12 @@ export function createDraftFiltersContext() {
         setSearch,
         roleFilter,
         setRoleFilter,
-        favouriteFilter,
-        setFavouriteFilter,
+        bannedOnlyFilter,
+        setBannedOnlyFilter,
+        metaFilter,
+        setMetaFilter,
+        availabilityFilter,
+        setAvailabilityFilter,
         resetDraftFilters,
     };
 }

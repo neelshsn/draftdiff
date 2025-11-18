@@ -1,24 +1,26 @@
 import { S3Client } from "@aws-sdk/client-s3";
 import "dotenv/config";
 
-if (!process.env.S3_ACCESS_KEY_ID) {
-    throw new Error("S3_ACCESS_KEY_ID must be set");
-}
+export const hasS3Credentials =
+    Boolean(process.env.S3_ACCESS_KEY_ID) &&
+    Boolean(process.env.S3_SECRET_ACCESS_KEY) &&
+    Boolean(process.env.S3_ENDPOINT);
 
-if (!process.env.S3_SECRET_ACCESS_KEY) {
-    throw new Error("S3_SECRET_ACCESS_KEY must be set");
-}
+let cachedClient: S3Client | undefined;
 
-if (!process.env.S3_ENDPOINT) {
-    throw new Error("S3_ENDPOINT must be set");
+export function getS3Client(): S3Client {
+    if (!hasS3Credentials) {
+        throw new Error("S3 credentials are not configured");
+    }
+    if (!cachedClient) {
+        cachedClient = new S3Client({
+            endpoint: process.env.S3_ENDPOINT,
+            region: process.env.S3_REGION || "auto",
+            credentials: {
+                accessKeyId: process.env.S3_ACCESS_KEY_ID!,
+                secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
+            },
+        });
+    }
+    return cachedClient;
 }
-
-// Api token is stored in the environment variable
-export const client = new S3Client({
-    endpoint: process.env.S3_ENDPOINT,
-    region: process.env.S3_REGION || "auto",
-    credentials: {
-        accessKeyId: process.env.S3_ACCESS_KEY_ID,
-        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
-    },
-});

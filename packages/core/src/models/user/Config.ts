@@ -2,6 +2,8 @@ import { RiskLevel } from "../../risk/risk-level";
 
 export type StatsSite = "op.gg" | "u.gg" | "lolalytics";
 
+export type DataSource = "riot" | "pro";
+
 export const DraftTablePlacement = {
     Bottom: "bottom",
     Hidden: "hidden",
@@ -21,11 +23,14 @@ export type DraftGapConfig = {
     banPlacement: DraftTablePlacement;
     unownedPlacement: DraftTablePlacement;
     showAdvancedWinrates: boolean;
+    quickPickMinPickRate: number;
     language: string;
 
     // MISC
     defaultStatsSite: StatsSite;
     enableBetaFeatures: boolean;
+    dataSource: DataSource;
+    proPatch: string;
 
     // LOL CLIENT
     disableLeagueClientIntegration: boolean;

@@ -28,20 +28,39 @@ export function analyzeDraft(
     fullDataset: Dataset,
     team: Map<Role, string>,
     enemy: Map<Role, string>,
-    config: AnalyzeDraftConfig
+    config: AnalyzeDraftConfig,
+    enemyDataset?: Dataset,
+    enemyFullDataset?: Dataset
 ): DraftResult {
     const priorGames = priorGamesByRiskLevel[config.riskLevel];
+    const scopedEnemyDataset = enemyDataset ?? dataset;
+    const scopedEnemyFullDataset = enemyFullDataset ?? fullDataset;
 
     const allyChampionRating = !config.ignoreChampionWinrates
         ? analyzeChampions(dataset, fullDataset, team, priorGames)
         : { totalRating: 0, winrate: 0, championResults: [] };
     const enemyChampionRating = !config.ignoreChampionWinrates
-        ? analyzeChampions(dataset, fullDataset, enemy, priorGames)
+        ? analyzeChampions(
+              scopedEnemyDataset,
+              scopedEnemyFullDataset,
+              enemy,
+              priorGames
+          )
         : { totalRating: 0, winrate: 0, championResults: [] };
 
     const allyDuoRating = analyzeDuos(fullDataset, team, priorGames);
-    const enemyDuoRating = analyzeDuos(fullDataset, enemy, priorGames);
-    const matchupRating = analyzeMatchups(fullDataset, team, enemy, priorGames);
+    const enemyDuoRating = analyzeDuos(
+        scopedEnemyFullDataset,
+        enemy,
+        priorGames
+    );
+    const matchupRating = analyzeMatchups(
+        fullDataset,
+        scopedEnemyFullDataset,
+        team,
+        enemy,
+        priorGames
+    );
 
     const totalRating =
         allyChampionRating.totalRating +
@@ -268,7 +287,8 @@ export type AnalyzeMatchupsResult = {
 };
 
 export function analyzeMatchups(
-    dataset: Dataset,
+    allyDataset: Dataset,
+    enemyDataset: Dataset,
     team: Map<Role, string>,
     enemy: Map<Role, string>,
     priorGames: number
@@ -278,9 +298,13 @@ export function analyzeMatchups(
 
     for (const [allyRole, allyChampionKey] of team) {
         for (const [enemyRole, enemyChampionKey] of enemy) {
-            const roleStats = getStats(dataset, allyChampionKey, allyRole);
+            const roleStats = getStats(
+                allyDataset,
+                allyChampionKey,
+                allyRole
+            );
             const enemyRoleStats = getStats(
-                dataset,
+                enemyDataset,
                 enemyChampionKey,
                 enemyRole
             );
@@ -299,7 +323,7 @@ export function analyzeMatchups(
             const expectedWinrate = ratingToWinrate(expectedRating);
 
             const matchupStats = getStats(
-                dataset,
+                allyDataset,
                 allyChampionKey,
                 allyRole,
                 "matchup",
@@ -307,7 +331,7 @@ export function analyzeMatchups(
                 enemyChampionKey
             );
             const enemyMatchupStats = getStats(
-                dataset,
+                enemyDataset,
                 enemyChampionKey,
                 enemyRole,
                 "matchup",

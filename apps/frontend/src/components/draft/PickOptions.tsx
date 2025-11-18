@@ -1,10 +1,9 @@
 import { Icon } from "solid-heroicons";
 import { ellipsisVertical } from "solid-heroicons/outline";
-import { presentationChartLine, trash, user } from "solid-heroicons/solid-mini";
+import { trash } from "solid-heroicons/solid-mini";
 import { useDraft } from "../../contexts/DraftContext";
 import { Team } from "@draftgap/core/src/models/Team";
-import { ROLES, Role } from "@draftgap/core/src/models/Role";
-import { linkByStatsSite } from "../../utils/sites";
+import { ROLES } from "@draftgap/core/src/models/Role";
 import { useUser } from "../../contexts/UserContext";
 import { useDraftAnalysis } from "../../contexts/DraftAnalysisContext";
 import { useDataset } from "../../contexts/DatasetContext";
@@ -31,12 +30,9 @@ export function PickOptions(props: { team: Team; index: number }) {
     const { dataset } = useDataset();
     const { pickChampion, allyTeam, opponentTeam } = useDraft();
 
-    const { allyTeamComp, opponentTeamComp, setAnalysisPick, analyzeHovers } =
-        useDraftAnalysis();
+    const { analyzeHovers } = useDraftAnalysis();
 
     const teamPicks = () => (props.team === "ally" ? allyTeam : opponentTeam);
-    const teamComp = () =>
-        props.team === "ally" ? allyTeamComp() : opponentTeamComp();
 
     const champion = () => {
         const pick = teamPicks()[props.index];
@@ -52,7 +48,7 @@ export function PickOptions(props: { team: Team; index: number }) {
     };
 
     return (
-        <div class="absolute right-0 top-0">
+        <div class="absolute right-2 top-2 z-20">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <As
@@ -86,43 +82,6 @@ export function PickOptions(props: { team: Team; index: number }) {
                             <DropdownMenuIcon path={trash} />
                             <span>Reset</span>
                             <DropdownMenuShortcut>R</DropdownMenuShortcut>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            disabled={!champion()}
-                            onSelect={() =>
-                                window.open(
-                                    champion()
-                                        ? linkByStatsSite(
-                                              config.defaultStatsSite,
-                                              champion()!.id,
-                                              [...teamComp().entries()].find(
-                                                  ([, value]) =>
-                                                      value ===
-                                                      teamPicks()[props.index]
-                                                          .championKey
-                                              )![0] as Role
-                                          )
-                                        : "#"
-                                )
-                            }
-                        >
-                            <DropdownMenuIcon path={user} />
-                            <span>{config.defaultStatsSite}</span>
-                            <DropdownMenuShortcut>B</DropdownMenuShortcut>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            disabled={!champion()}
-                            onSelect={() =>
-                                setAnalysisPick({
-                                    team: props.team,
-                                    championKey:
-                                        teamPicks()[props.index].championKey!,
-                                })
-                            }
-                        >
-                            <DropdownMenuIcon path={presentationChartLine} />
-                            <span>Analysis</span>
-                            <DropdownMenuShortcut>F</DropdownMenuShortcut>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <div class="flex px-1.5 justify-around">

@@ -9,7 +9,6 @@ import { createStore } from "solid-js/store";
 import { displayNameByRole, Role } from "@draftgap/core/src/models/Role";
 import { Team } from "@draftgap/core/src/models/Team";
 import { useDraftView } from "./DraftViewContext";
-import { useMedia } from "../hooks/useMedia";
 import { useDataset } from "./DatasetContext";
 import { useDraftFilters } from "./DraftFiltersContext";
 
@@ -26,10 +25,22 @@ type Selection = {
     index: number;
 };
 
+export const DRAFT_SEQUENCE: readonly { team: Team; index: number }[] = [
+    { team: "ally", index: 0 },
+    { team: "opponent", index: 0 },
+    { team: "opponent", index: 1 },
+    { team: "ally", index: 1 },
+    { team: "ally", index: 2 },
+    { team: "opponent", index: 2 },
+    { team: "opponent", index: 3 },
+    { team: "ally", index: 3 },
+    { team: "ally", index: 4 },
+    { team: "opponent", index: 4 },
+] as const;
+
 export function createDraftContext() {
-    const { dataset } = useDataset();
+    const { dataset, dataset30Days } = useDataset();
     const { setCurrentDraftView, currentDraftView } = useDraftView();
-    const { isMobileLayout } = useMedia();
     const { resetDraftFilters } = useDraftFilters();
 
     const [allyTeam, setAllyTeam] = createStore<TeamPicks>([
@@ -47,29 +58,44 @@ export function createDraftContext() {
         { championKey: undefined, role: undefined, hoverKey: undefined },
     ]);
 
+    const [allyProTeam, setAllyProTeam] = createSignal<string | undefined>();
+    const [opponentProTeam, setOpponentProTeam] =
+        createSignal<string | undefined>();
+
     const [bans, setBans] = createStore<string[]>([]);
     // If empty, assume all champions are owned
     const [ownedChampions, setOwnedChampions] = createSignal<Set<string>>(
         new Set()
     );
 
-    function getNextPick(team: Team) {
-        const picks = team === "ally" ? allyTeam : opponentTeam;
+    const getSlotPick = (slot: { team: Team; index: number }) =>
+        (slot.team === "ally" ? allyTeam : opponentTeam)[slot.index];
 
-        return picks.findIndex((pick) => pick.championKey === undefined);
-    }
+    const isSlotFilled = (slot: { team: Team; index: number }) =>
+        getSlotPick(slot).championKey !== undefined;
 
-    function fixClashes(championKey: string, index: number) {
+    const findFirstOpenSlot = () =>
+        DRAFT_SEQUENCE.find((slot) => !isSlotFilled(slot));
+
+    const currentTurn = () => findFirstOpenSlot();
+
+    function fixClashes(team: Team, championKey: string, index: number) {
         const allyClashingChampion = allyTeam.findIndex(
             (p) => p.championKey === championKey
         );
-        if (allyClashingChampion !== -1 && allyClashingChampion !== index) {
+        if (
+            allyClashingChampion !== -1 &&
+            (team !== "ally" || allyClashingChampion !== index)
+        ) {
             resetChampion("ally", allyClashingChampion);
         }
         const opponentClashingChampion = opponentTeam.findIndex(
             (p) => p.championKey === championKey
         );
-        if (opponentClashingChampion !== -1 && allyClashingChampion !== index) {
+        if (
+            opponentClashingChampion !== -1 &&
+            (team !== "opponent" || opponentClashingChampion !== index)
+        ) {
             resetChampion("opponent", opponentClashingChampion);
         }
     }
@@ -82,6 +108,19 @@ export function createDraftContext() {
         if (clashingRole !== -1 && clashingRole !== index) {
             setTeam(clashingRole, "role", undefined);
         }
+    }
+
+    function resolveTargetIndex(team: Team, desiredIndex: number | undefined) {
+        const teamPicks = team === "ally" ? allyTeam : opponentTeam;
+        if (
+            desiredIndex !== undefined &&
+            desiredIndex >= 0 &&
+            desiredIndex < teamPicks.length
+        ) {
+            return desiredIndex;
+        }
+
+        return -1;
     }
 
     function pickChampion(
@@ -97,74 +136,91 @@ export function createDraftContext() {
         } = {}
     ) {
         batch(() => {
-            if (
-                championKey &&
-                dataset()?.championData[championKey] === undefined
-            ) {
+            const championData =
+                championKey !== undefined
+                    ? dataset()?.championData[championKey] ??
+                      dataset30Days()?.championData[championKey]
+                    : undefined;
+
+            let targetTeam: Team = team;
+            let targetIndex = resolveTargetIndex(targetTeam, index);
+
+            if (championKey !== undefined) {
+                const slot = currentTurn();
+                if (!slot) {
+                    return;
+                }
+                targetTeam = slot.team;
+                targetIndex = slot.index;
+            }
+
+            if (targetIndex === -1) {
                 return;
             }
 
-            const setTeam = team === "ally" ? setAllyTeam : setOpponentTeam;
+            const setTeam =
+                targetTeam === "ally" ? setAllyTeam : setOpponentTeam;
 
             if (championKey !== undefined) {
-                fixClashes(championKey, index);
-            }
-            if (championKey !== undefined && role !== undefined) {
-                fixRoleClashes(team, role, index);
+                fixClashes(targetTeam, championKey, targetIndex);
+                if (role !== undefined) {
+                    fixRoleClashes(targetTeam, role, targetIndex);
+                }
+            } else if (role !== undefined) {
+                fixRoleClashes(targetTeam, role, targetIndex);
             }
 
-            setTeam(index, {
+            setTeam(targetIndex, {
                 championKey,
                 role,
                 hoverKey: undefined,
             });
 
-            if (updateView && currentDraftView().type === "draft") {
-                setCurrentDraftView({
-                    type: "draft",
-                    subType: team,
+            if (updateSelection) {
+                focusCurrentSlot(resetFilters);
+            } else if (resetFilters) {
+                resetDraftFilters();
+            }
+
+            if (reportEvent && championKey !== undefined && championData) {
+                gtag("event", "pick_champion", {
+                    event_category: "draft",
+                    champion_key: championKey,
+                    champion_name: championData.name,
+                    role,
+                    role_name: role ? displayNameByRole[role] : undefined,
                 });
             }
 
-            if (updateSelection) {
-                let nextIndex = getNextPick(team);
-                if (nextIndex === -1) {
-                    const otherTeam = team === "ally" ? "opponent" : "ally";
-                    nextIndex = getNextPick(otherTeam);
-                    if (nextIndex !== -1) {
-                        select(otherTeam, nextIndex);
-                    } else {
-                        select(undefined, 0);
-                    }
-                } else {
-                    select(team, nextIndex);
-                }
-            }
-
             if (
-                draftFinished() &&
                 updateView &&
-                currentDraftView().type === "draft"
+                championKey !== undefined &&
+                currentDraftView().type === "draft" &&
+                draftFinished()
             ) {
                 setCurrentDraftView({
                     type: "analysis",
                 });
             }
-
-            if (resetFilters) {
-                resetDraftFilters();
-            }
-
-            if (reportEvent && championKey !== undefined) {
-                gtag("event", "pick_champion", {
-                    event_category: "draft",
-                    champion_key: championKey,
-                    champion_name: dataset()!.championData[championKey].name,
-                    role,
-                    role_name: role ? displayNameByRole[role] : undefined,
-                });
-            }
         });
+    }
+
+    function assignRole(
+        team: Team,
+        index: number,
+        role: Role | undefined
+    ) {
+        const teamPicks = team === "ally" ? allyTeam : opponentTeam;
+        const setTeam = team === "ally" ? setAllyTeam : setOpponentTeam;
+        const current = teamPicks[index];
+        if (!current || !current.championKey) {
+            return;
+        }
+        if (role !== undefined) {
+            fixRoleClashes(team, role, index);
+        }
+        setTeam(index, "role", role);
+        setTeam(index, "hoverKey", undefined);
     }
 
     function hoverChampion(
@@ -174,24 +230,34 @@ export function createDraftContext() {
         role: Role | undefined
     ) {
         batch(() => {
-            if (
-                championKey &&
-                dataset()?.championData[championKey] === undefined
-            ) {
+            let targetTeam: Team = team;
+            let targetIndex = resolveTargetIndex(targetTeam, index);
+
+            if (championKey !== undefined) {
+                const slot = currentTurn();
+                if (!slot) {
+                    return;
+                }
+                targetTeam = slot.team;
+                targetIndex = slot.index;
+            }
+
+            if (targetIndex === -1) {
                 return;
             }
 
-            const setTeam = team === "ally" ? setAllyTeam : setOpponentTeam;
+            const setTeam =
+                targetTeam === "ally" ? setAllyTeam : setOpponentTeam;
 
             if (championKey !== undefined) {
-                fixClashes(championKey, index);
+                fixClashes(targetTeam, championKey, targetIndex);
             }
 
             if (championKey !== undefined && role !== undefined) {
-                fixRoleClashes(team, role, index);
+                fixRoleClashes(targetTeam, role, targetIndex);
             }
 
-            setTeam(index, {
+            setTeam(targetIndex, {
                 championKey: undefined,
                 role,
                 hoverKey: championKey,
@@ -220,28 +286,72 @@ export function createDraftContext() {
         batch(() => {
             resetTeam("ally");
             resetTeam("opponent");
+            setBans([]);
         });
     };
 
+    const banChampion = (championKey: string) => {
+        if (bans.includes(championKey)) {
+            return;
+        }
+
+        if (bans.length >= 50) {
+            return;
+        }
+
+        setBans([...bans, championKey]);
+    };
+
+    const unbanChampion = (championKey: string) => {
+        if (!bans.includes(championKey)) {
+            return;
+        }
+
+        setBans(bans.filter((ban) => ban !== championKey));
+    };
+
+    const toggleBan = (championKey: string) => {
+        if (bans.includes(championKey)) {
+            unbanChampion(championKey);
+            return;
+        }
+
+        banChampion(championKey);
+    };
+
+    const initialSlot = DRAFT_SEQUENCE[0];
     const [selection, setSelection] = createStore<Selection>({
-        team: isMobileLayout() ? undefined : "ally",
-        index: 0,
+        team: initialSlot.team,
+        index: initialSlot.index,
     });
+
+    function focusCurrentSlot(resetFilters = true) {
+        const slot = currentTurn();
+        setSelection("team", slot?.team);
+        setSelection("index", slot?.index ?? 0);
+        if (resetFilters) {
+            resetDraftFilters();
+        }
+        if (currentDraftView().type === "draft") {
+            setCurrentDraftView({
+                type: "draft",
+                subType: slot?.team ?? "draft",
+            });
+        }
+    }
+
+    function draftFinished() {
+        return currentTurn() === undefined;
+    }
 
     const select = (
         team: Team | undefined,
         index?: number,
         resetFilters = true
     ) => {
-        if (team !== undefined && index !== undefined) {
-            const teamPicks = team === "ally" ? allyTeam : opponentTeam;
-            if (teamPicks[index].championKey !== undefined) {
-                return;
-            }
-        }
-
-        if (index === undefined && team !== undefined) {
-            index = getNextPick(team!);
+        if (!draftFinished()) {
+            focusCurrentSlot(resetFilters);
+            return;
         }
 
         setSelection("team", team);
@@ -252,23 +362,26 @@ export function createDraftContext() {
 
         setCurrentDraftView({
             type: "draft",
-            subType: (draftFinished() ? "draft" : team) ?? "draft",
+            subType: team ?? "draft",
         });
     };
-
-    const draftFinished = () =>
-        [...allyTeam, ...opponentTeam].every(
-            (s) => s.championKey !== undefined
-        );
 
     return {
         allyTeam,
         opponentTeam,
+        allyProTeam,
+        opponentProTeam,
+        setAllyProTeam,
+        setOpponentProTeam,
         bans,
         setBans,
+        banChampion,
+        unbanChampion,
+        toggleBan,
         ownedChampions,
         setOwnedChampions,
         pickChampion,
+        assignRole,
         hoverChampion,
         resetChampion,
         resetTeam,
@@ -276,6 +389,7 @@ export function createDraftContext() {
         selection,
         select,
         draftFinished,
+        currentTurn,
     };
 }
 
@@ -300,6 +414,7 @@ export function DraftProvider(props: { children: JSXElement }) {
             DRAFTGAP_DEBUG.pickChampion("opponent", 4, "16", 4);
         });
     };
+    DRAFTGAP_DEBUG.assignRole = ctx.assignRole;
 
     return (
         <DraftContext.Provider value={ctx}>

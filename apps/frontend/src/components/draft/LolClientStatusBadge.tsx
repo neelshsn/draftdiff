@@ -1,8 +1,6 @@
 import { Component, Match, Switch } from "solid-js";
 import { ClientState, useLolClient } from "../../contexts/LolClientContext";
-import { createErrorToast } from "../../utils/toast";
 import { Badge } from "../common/Badge";
-import { useMedia } from "../../hooks/useMedia";
 import {
     Dialog,
     DialogContent,
@@ -18,21 +16,10 @@ type Props = {
 };
 
 export const LolClientStatusBadge: Component<Props> = (props) => {
-    const { isDesktop } = useMedia();
     const { clientState, clientError } = useLolClient();
 
     return (
         <Switch>
-            <Match when={!isDesktop}>
-                <Badge
-                    as="button"
-                    onClick={() => props.setShowDownloadModal(true)}
-                    theme="primary"
-                    class="hidden md:block"
-                >
-                    Sync with league client
-                </Badge>
-            </Match>
             <Match when={clientState() === ClientState.Disabled}>
                 <Badge theme="secondary">Disabled</Badge>
             </Match>

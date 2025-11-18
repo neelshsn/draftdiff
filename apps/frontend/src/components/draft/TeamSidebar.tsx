@@ -25,32 +25,38 @@ export function TeamSidebar(props: IProps) {
             ? allyDraftResult()?.totalRating
             : opponentDraftResult()?.totalRating;
 
+    const estimatedWinrate = () => ratingToWinrate(rating() ?? 0);
+
     return (
         <div class="bg-primary flex flex-col h-full relative">
             <DamageDistributionBar team={props.team} />
             <div class="flex-1 flex justify-center items-center bg-[#141414]">
-                <span
-                    class="text-[2.5rem] text-center leading-tight"
+                <div
+                    class="flex flex-col items-center gap-2 text-center"
                     // @ts-ignore
                     use:tooltip={{
-                        content: (
-                            <>{capitalize(props.team)} estimated winrate</>
-                        ),
+                        content: <>{capitalize(props.team)} estimation</>,
                     }}
                 >
-                    {props.team.toUpperCase()}
-                    <br />
-                    <CountUp
-                        value={rating() ? ratingToWinrate(rating()!) : 0.5}
-                        formatFn={(value) => (value * 100).toFixed(2)}
-                        class={`${getRatingClass(
-                            rating() ?? 0
-                        )} transition-colors duration-500`}
-                        style={{
-                            "font-variant-numeric": "tabular-nums",
-                        }}
-                    />
-                </span>
+                    <span class="text-xs uppercase text-neutral-400 tracking-wide">
+                        {props.team.toUpperCase()}
+                    </span>
+                    <div class="flex flex-col items-center gap-1">
+                        <CountUp
+                            value={estimatedWinrate()}
+                            formatFn={(value) => (value * 100).toFixed(2)}
+                            class={`${getRatingClass(
+                                rating() ?? 0
+                            )} transition-colors duration-500 text-2xl`}
+                            style={{
+                                "font-variant-numeric": "tabular-nums",
+                            }}
+                        />
+                        <span class="text-[11px] uppercase text-neutral-500">
+                            Winrate estime
+                        </span>
+                    </div>
+                </div>
             </div>
             <For each={[0, 1, 2, 3, 4]}>
                 {(index) => <Pick team={props.team} index={index} />}
@@ -59,3 +65,5 @@ export function TeamSidebar(props: IProps) {
         </div>
     );
 }
+
+

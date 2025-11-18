@@ -29,7 +29,7 @@ export const SummaryCard = (
         number?: number;
         href?: string;
         tooltip: JSX.Element;
-    } & JSX.HTMLAttributes<HTMLDivElement>
+    } & JSX.AnchorHTMLAttributes<HTMLAnchorElement>
 ) => {
     const colorClasses = () => {
         if (!props.team) return "bg-[#101010]";

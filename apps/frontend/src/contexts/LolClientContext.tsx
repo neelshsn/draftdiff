@@ -10,24 +10,17 @@ import { createStore } from "solid-js/store";
 import {
     getChampSelectSession,
     getCurrentSummoner,
-    getGridChampions,
     getPickableChampionIds,
 } from "../api/lcu-api";
-import { getRoleFromString, Role } from "@draftgap/core/src/models/Role";
+import { Role } from "@draftgap/core/src/models/Role";
 import { Team } from "@draftgap/core/src/models/Team";
 import {
     LolChampSelectChampSelectPlayerSelection,
     LolChampSelectChampSelectSession,
     LolSummonerSummoner,
 } from "../types/Lcu";
-import {
-    createImportFavouritePicksSuccessToast,
-    createImportFavouritePicksToast,
-} from "../utils/toast";
 import { useDraft } from "./DraftContext";
 import { useMedia } from "../hooks/useMedia";
-import { useUser } from "./UserContext";
-import { LolalyticsRole } from "../../../dataset/src/lolalytics/roles";
 
 const createChampSelectSession = (): LolChampSelectChampSelectSession => ({
     actions: [],
@@ -96,8 +89,6 @@ export const createLolClientContext = () => {
         setBans,
         setOwnedChampions,
     } = useDraft();
-    const { isFavourite, setFavourite } = useUser();
-
     const [clientState, setClientState] = createSignal<ClientState>(
         ClientState.NotFound
     );
@@ -242,56 +233,6 @@ export const createLolClientContext = () => {
         });
     };
 
-    const checkImportFavourites = async () => {
-        const DRAFTGAP_IMPORT_FAVOURITES_LAST_ASKED =
-            "draftgap-import-favourites-last-asked";
-        const lastAsked = localStorage.getItem(
-            DRAFTGAP_IMPORT_FAVOURITES_LAST_ASKED
-        );
-        if (lastAsked) {
-            const lastAskedDate = new Date(lastAsked);
-            const now = new Date();
-            const ONE_WEEK = 1000 * 60 * 60 * 24 * 7;
-            if (now.getTime() - lastAskedDate.getTime() < ONE_WEEK) {
-                return;
-            }
-        }
-
-        const gridChampions = await getGridChampions();
-        if (!gridChampions) {
-            console.error("Failed to get grid champions");
-            return;
-        }
-
-        const lolFavourites = gridChampions?.flatMap((c) =>
-            c.positionsFavorited.map((p) => ({
-                championKey: c.id.toString(),
-                role: getRoleFromString(p as LolalyticsRole),
-            }))
-        );
-
-        const nonFavouritePicks = lolFavourites.filter(
-            (f) => !isFavourite(f.championKey, f.role)
-        );
-
-        if (!nonFavouritePicks.length) {
-            return;
-        }
-
-        createImportFavouritePicksToast(() => {
-            for (const nonFavourite of nonFavouritePicks) {
-                setFavourite(nonFavourite.championKey, nonFavourite.role, true);
-            }
-
-            createImportFavouritePicksSuccessToast(nonFavouritePicks.length);
-        });
-
-        localStorage.setItem(
-            DRAFTGAP_IMPORT_FAVOURITES_LAST_ASKED,
-            new Date().toISOString()
-        );
-    };
-
     const updateUnownedChampions = async () => {
         const ownedChampions = await getPickableChampionIds();
         if (!ownedChampions) {
@@ -331,7 +272,6 @@ export const createLolClientContext = () => {
                     batch(() => {
                         if (clientState() !== ClientState.InChampSelect) {
                             updateUnownedChampions();
-                            checkImportFavourites();
                             resetAll();
                             setBans([]);
                         }

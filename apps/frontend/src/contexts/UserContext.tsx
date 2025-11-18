@@ -1,15 +1,6 @@
-import {
-    JSXElement,
-    createContext,
-    createEffect,
-    createSignal,
-    useContext,
-} from "solid-js";
+import { JSXElement, createContext, createEffect, useContext } from "solid-js";
 import { createStore } from "solid-js/store";
-import { Role } from "@draftgap/core/src/models/Role";
 import { DraftGapConfig } from "@draftgap/core/src/models/user/Config";
-
-type FavouritePick = `${string}:${Role}`;
 
 const DEFAULT_CONFIG: DraftGapConfig = {
     // DRAFT CONFIG
@@ -22,22 +13,49 @@ const DEFAULT_CONFIG: DraftGapConfig = {
     banPlacement: "bottom",
     unownedPlacement: "bottom",
     showAdvancedWinrates: false,
+    quickPickMinPickRate: 0,
     language: "en_US",
 
     // MISC
     defaultStatsSite: "lolalytics",
     enableBetaFeatures: false,
+    dataSource: "riot",
+    proPatch: "latest",
 
     // LOL CLIENT
     disableLeagueClientIntegration: false,
 };
 
-const FAVOURITE_PICKS_KEY = "draftgap-favourite-picks";
-const CONFIG_KEY = "draftgap-config";
+type StoredConfig = Partial<DraftGapConfig> & {
+    proPatchWindow?: unknown;
+};
+
+function migrateStoredConfig(raw: unknown): Partial<DraftGapConfig> {
+    if (!raw || typeof raw !== "object") {
+        return {};
+    }
+
+    const mutable = { ...(raw as StoredConfig) };
+
+    if (mutable.proPatch === undefined) {
+        const windowValue = (mutable as StoredConfig).proPatchWindow;
+        if (typeof windowValue === "number") {
+            mutable.proPatch = windowValue <= 0 ? "all" : "latest";
+        } else {
+            mutable.proPatch = "latest";
+        }
+    }
+
+    if ("proPatchWindow" in mutable) {
+        delete (mutable as StoredConfig).proPatchWindow;
+    }
+
+    return mutable;
+}
 
 function createConfig() {
-    const partialInitialConfig = JSON.parse(
-        localStorage.getItem(CONFIG_KEY) || "{}"
+    const partialInitialConfig = migrateStoredConfig(
+        JSON.parse(localStorage.getItem("draftgap-config") || "{}")
     );
 
     const [config, setConfig] = createStore<DraftGapConfig>({
@@ -45,58 +63,33 @@ function createConfig() {
         ...partialInitialConfig,
     });
     createEffect(() => {
-        localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+        localStorage.setItem("draftgap-config", JSON.stringify(config));
     });
 
     return [config, setConfig] as const;
 }
 
-function createFavouritePicks() {
-    const favouriteInitial = localStorage.getItem(FAVOURITE_PICKS_KEY);
-    const favouriteInitialParsed = JSON.parse(favouriteInitial || "[]");
-
-    const [favouritePicks, setFavouritePicks] = createSignal<
-        Set<FavouritePick>
-    >(new Set(favouriteInitialParsed));
-    createEffect(() => {
-        localStorage.setItem(
-            "draftgap-favourite-picks",
-            JSON.stringify([...favouritePicks()])
-        );
-    });
-
-    return [favouritePicks, setFavouritePicks] as const;
-}
-
 function createUserContext() {
     const [config, setConfig] = createConfig();
-    const [favouritePicks, setFavouritePicks] = createFavouritePicks();
 
-    function setFavourite(championKey: string, role: Role, value: boolean) {
-        const favouritePick: FavouritePick = `${championKey}:${role}`;
-        const newFavourites = new Set(favouritePicks());
+    let hasAppliedProDefault = false;
 
-        if (value) {
-            newFavourites.add(favouritePick);
+    createEffect(() => {
+        if (config.dataSource === "pro") {
+            if (!hasAppliedProDefault) {
+                hasAppliedProDefault = true;
+                if (!config.ignoreChampionWinrates) {
+                    setConfig({ ignoreChampionWinrates: true });
+                }
+            }
         } else {
-            newFavourites.delete(favouritePick);
+            hasAppliedProDefault = false;
         }
-
-        setFavouritePicks(newFavourites);
-    }
-
-    const isFavourite = (championKey: string, role: Role) => {
-        const favouritePick: FavouritePick = `${championKey}:${role}`;
-
-        return favouritePicks().has(favouritePick);
-    };
+    });
 
     return {
         config,
         setConfig,
-        favouritePicks,
-        setFavourite,
-        isFavourite,
     };
 }
 
