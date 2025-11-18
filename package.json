@@ -7,12 +7,13 @@
         "dev": "pnpm run --filter @draftgap/frontend dev",
         "tauri": "pnpm run --filter @draftgap/frontend tauri"
     },
-    "devDependencies": {
-        "@types/node": "^20.4.4",
-        "tsx": "^3.12.7"
-    },
     "dependencies": {
         "turbo": "^2.5.3"
+    },
+    "devDependencies": {
+        "@types/node": "^20.4.4",
+        "pnpm": "^10.0.0",
+        "tsx": "^3.12.7"
     },
     "packageManager": "pnpm@10.0.0"
 }
